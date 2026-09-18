@@ -1,0 +1,9 @@
+node_modules/
+.dev.vars
+.wrangler/
+.reference-src/
+.reference-tg-web-proxy.zip
+
+.xdg/
+.wrangler-dry-run/
+.wrangler-logs/
