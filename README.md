@@ -42,15 +42,117 @@ Telegram Android 客户端首先通过 HTTPS 打开 Worker 提供的 Bridge 页�
 
 项目没有 `UPSTREAM_HOST` 或 `UPSTREAM_PORT` 配置，也不会连接用户指定的任意目标。通过验证的连接只能访问代码内预设的 Telegram DC 地址和 TCP 443 端口。
 
-## 部署要求
+## 部署到 Cloudflare
 
-- Node.js 20 或更高版本
-- 已启用 Workers 的 Cloudflare 账户
-- 推荐使用托管在 Cloudflare 上的自定义域名
+本项目是 **Cloudflare Worker**，不是 Cloudflare Pages 项目。最简单的部署方式是点击下面的一键部署按钮。
 
-## 安装依赖
+### 方法一：一键部署（推荐）
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/coldboy404/cf-webproxy)
+
+点击按钮后按以下步骤操作：
+
+1. 登录你的 Cloudflare 账户。
+2. 如果页面要求连接 GitHub，请授权 Cloudflare 访问 GitHub。
+3. Cloudflare 会把本项目复制到你的 GitHub 账户，并自动识别 `wrangler.toml`。
+4. Worker 名称可以保持默认，也可以改成你喜欢的名称，例如 `tg-webproxy`。
+5. 在 Secret 配置页面填写：
+   - `PROXY_SECRET`：32 位小写十六进制字符串；也可以是 `dd` 加 32 位十六进制字符串。
+   - `SESSION_SIGNING_KEY`：独立的随机签名密钥，建议使用 64 位十六进制字符串。
+6. 确认部署。Cloudflare 会自动创建并绑定项目需要的 Durable Object。
+7. 部署完成后，Cloudflare 会提供类似下面的地址：
+
+```text
+https://tg-webproxy.你的账户名.workers.dev
+```
+
+如果一键部署页面没有要求填写 Secret，请在部署完成后进入：
+
+```text
+Cloudflare 控制台
+→ Workers & Pages
+→ 选择刚部署的 Worker
+→ Settings（设置）
+→ Variables and Secrets（变量和机密）
+→ Add（添加）
+```
+
+添加下面两个 **Secret**，不要添加成普通明文变量：
+
+| 名称 | 示例格式 |
+|---|---|
+| `PROXY_SECRET` | `0123456789abcdef0123456789abcdef` |
+| `SESSION_SIGNING_KEY` | `64 位随机十六进制字符串` |
+
+保存后，在 Worker 的 **Deployments（部署）** 页面重新部署一次，使 Secret 生效。
+
+### 如何生成 Secret
+
+Linux、macOS、Git Bash 或装有 OpenSSL 的 Windows：
 
 ```bash
+# 生成 PROXY_SECRET
+openssl rand -hex 16
+
+# 生成 SESSION_SIGNING_KEY
+openssl rand -hex 32
+```
+
+没有 OpenSSL 时，可以在浏览器开发者工具的 Console 中执行：
+
+```js
+// PROXY_SECRET
+[...crypto.getRandomValues(new Uint8Array(16))]
+  .map(x => x.toString(16).padStart(2, "0")).join("")
+
+// SESSION_SIGNING_KEY
+[...crypto.getRandomValues(new Uint8Array(32))]
+  .map(x => x.toString(16).padStart(2, "0")).join("")
+```
+
+如果希望使用 `dd` Secret，在生成的 32 位 `PROXY_SECRET` 前面加上 `dd`：
+
+```text
+dd0123456789abcdef0123456789abcdef
+```
+
+### 方法二：在 Cloudflare 控制台导入 GitHub 仓库
+
+如果不使用一键部署按钮，也可以手动导入：
+
+1. 打开 Cloudflare 控制台。
+2. 进入 **Workers & Pages**。
+3. 点击 **Create application（创建应用）**。
+4. 选择 **Import a repository（导入仓库）** 或连接 GitHub。
+5. 选择你 Fork 后的 `cf-webproxy` 仓库。
+6. 使用以下构建配置：
+
+| 配置 | 填写内容 |
+|---|---|
+| Production branch | `main` |
+| Build command | 留空或填写 `npm test` |
+| Deploy command | `npx wrangler deploy` |
+| Root directory | `/` |
+
+7. 保存并部署。
+8. 按上一节的方法，在 Worker 设置中添加 `PROXY_SECRET` 和 `SESSION_SIGNING_KEY` 两个 Secret。
+9. 添加 Secret 后重新部署。
+
+仓库已经包含 `wrangler.toml`，其中声明了 Worker 入口和 Durable Object。不要把该项目当成 Pages 静态网站部署，也不需要填写 `dist` 输出目录。
+
+### 方法三：使用 Wrangler 命令行部署
+
+要求：
+
+- Node.js 20 或更高版本
+- npm
+- Cloudflare 账户
+
+克隆项目：
+
+```bash
+git clone https://github.com/coldboy404/cf-webproxy.git
+cd cf-webproxy
 npm install
 ```
 
@@ -60,38 +162,41 @@ npm install
 npx wrangler login
 ```
 
-## 配置 Secret
-
-生成 16 字节随机 Secret：
-
-```bash
-openssl rand -hex 16
-```
-
-将生成的 32 位小写十六进制字符串写入 Worker Secret：
+设置两个 Secret：
 
 ```bash
 npx wrangler secret put PROXY_SECRET
-```
-
-如果需要使用 `dd` 格式，可以在生成的 Secret 前添加 `dd`，例如：
-
-```text
-dd0123456789abcdef0123456789abcdef
-```
-
-再生成一个独立的会话签名密钥：
-
-```bash
-openssl rand -hex 32
 npx wrangler secret put SESSION_SIGNING_KEY
 ```
 
-请不要将 `PROXY_SECRET` 和 `SESSION_SIGNING_KEY` 直接写入 `wrangler.toml` 或提交到 Git 仓库。
+每条命令执行后，按照终端提示粘贴对应的随机值。然后运行测试和部署：
 
-## 配置自定义域名
+```bash
+npm test
+npx wrangler deploy
+```
 
-可以在 `wrangler.toml` 中填写对外使用的域名：
+部署成功后，终端会显示 Worker 地址，例如：
+
+```text
+https://cf-webproxy.你的账户名.workers.dev
+```
+
+### 绑定自定义域名（推荐）
+
+`workers.dev` 域名可以直接使用，但部分网络环境可能无法稳定访问，因此建议绑定一个托管在 Cloudflare 的自定义域名。
+
+1. 进入 Cloudflare 控制台中的 Worker。
+2. 打开 **Settings（设置）→ Domains & Routes（域和路由）**。
+3. 点击 **Add（添加）→ Custom Domain（自定义域）**。
+4. 填写域名，例如：
+
+```text
+proxy.example.com
+```
+
+5. 等待证书签发完成。
+6. 修改 `wrangler.toml`：
 
 ```toml
 [vars]
@@ -100,44 +205,46 @@ MAX_STREAMS = "64"
 SESSION_TTL_SECONDS = "300"
 ```
 
-`PUBLIC_HOSTNAME` 不要包含 `https://`，也不要包含路径。
-
-如果保持为空：
-
-```toml
-PUBLIC_HOSTNAME = ""
-```
-
-Worker 将使用当前请求的主机名。
-
-## 测试与部署
-
-运行单元测试：
-
-```bash
-npm test
-```
-
-执行 Wrangler 构建检查，但不实际部署：
-
-```bash
-npx wrangler deploy --dry-run
-```
-
-正式部署：
-
-```bash
-npm run deploy
-```
-
-也可以直接执行：
+7. 提交修改触发自动部署，或者再次执行：
 
 ```bash
 npx wrangler deploy
 ```
 
-部署后建议在 Cloudflare 控制台中为 Worker 绑定自定义域名。
+如果 `PUBLIC_HOSTNAME` 保持为空，Worker 会自动使用收到请求时的主机名。因此仅使用 `workers.dev` 地址时通常不需要修改它。
 
+### 验证部署是否成功
+
+在浏览器访问：
+
+```text
+https://你的 Worker 域名/healthz
+```
+
+正常情况下会返回：
+
+```json
+{
+  "ok": true,
+  "carrier": "websocket",
+  "relay": "direct-telegram-dc"
+}
+```
+
+如果能看到以上结果，说明 Worker 和 Durable Object 已经成功部署。这个健康检查只验证 Worker 服务正常，不会暴露 Secret。
+
+### 更新项目
+
+命令行部署的项目可以这样更新：
+
+```bash
+git pull
+npm install
+npm test
+npx wrangler deploy
+```
+
+通过一键部署或 GitHub 导入的项目，推送到生产分支后，Cloudflare Workers Builds 会自动重新部署。
 ## 添加到 Telegram
 
 代理链接格式如下：

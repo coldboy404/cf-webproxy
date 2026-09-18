@@ -10,5 +10,15 @@
   },
   "devDependencies": {
     "wrangler": "^4.37.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "PROXY_SECRET": {
+        "description": "Telegram WEB Proxy 密钥。请填写 32 位小写十六进制字符串，也可以使用 dd 加 32 位十六进制字符串。可运行 openssl rand -hex 16 生成。"
+      },
+      "SESSION_SIGNING_KEY": {
+        "description": "会话签名密钥，必须与 PROXY_SECRET 不同。建议运行 openssl rand -hex 32 生成 64 位十六进制随机值。"
+      }
+    }
   }
 }
