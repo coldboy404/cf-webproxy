@@ -47,6 +47,7 @@ export class WebProxySession {
   }
 
   trace(event, details = {}) {
+    if (String(this.env.DIAGNOSTICS || "") !== "1") return;
     console.log("webproxy", { traceId: this.traceId, event, ...details });
   }
 
@@ -348,17 +349,9 @@ async function route(request, env) {
     const token = protocol?.slice("tproxy-v1.".length);
     if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return camouflage();
     const stub = env.SESSIONS.get(env.SESSIONS.idFromName(token));
-    console.log("webproxy", { event: "ws_proxy_start" });
-    try {
-      const response = await stub.fetch("https://session/internal/ws", {
-        headers: { Upgrade: "websocket", "X-TProxy-Protocol": protocol },
-      });
-      console.log("webproxy", { event: "ws_proxy_response", status: response.status, hasWebSocket: Boolean(response.webSocket) });
-      return response;
-    } catch (error) {
-      console.error("webproxy", { event: "ws_proxy_failed", error: safeError(error) });
-      throw error;
-    }
+    return stub.fetch("https://session/internal/ws", {
+      headers: { Upgrade: "websocket", "X-TProxy-Protocol": protocol },
+    });
   }
 
   if (url.pathname === "/healthz" && request.method === "GET") {
@@ -498,7 +491,9 @@ async function verifyBootstrap(env, token, _ip) {
 }
 
 function signingKey(env) {
-  return new TextEncoder().encode(String(env.SESSION_SIGNING_KEY || env.PROXY_SECRET || ""));
+  // Domain separation lets one user-supplied proxy secret safely serve both
+  // MTProxy authentication and short-lived bootstrap-token signing.
+  return new TextEncoder().encode(`cf-webproxy/session-signing/v1\n${String(env.PROXY_SECRET || "")}`);
 }
 
 async function hmac(keyBytes, data) {

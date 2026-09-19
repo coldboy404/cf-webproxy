@@ -58,7 +58,6 @@ Telegram Android 客户端首先通过 HTTPS 打开 Worker 提供的 Bridge 页�
 4. Worker 名称可以保持默认，也可以改成你喜欢的名称，例如 `tg-webproxy`。
 5. 在 Secret 配置页面填写：
    - `PROXY_SECRET`：32 位小写十六进制字符串；也可以是 `dd` 加 32 位十六进制字符串。
-   - `SESSION_SIGNING_KEY`：独立的随机签名密钥，建议使用 64 位十六进制字符串。
 6. 确认部署。Cloudflare 会自动创建并绑定项目需要的 Durable Object。
 7. 部署完成后，Cloudflare 会提供类似下面的地址：
 
@@ -82,7 +81,6 @@ Cloudflare 控制台
 | 名称 | 示例格式 |
 |---|---|
 | `PROXY_SECRET` | `0123456789abcdef0123456789abcdef` |
-| `SESSION_SIGNING_KEY` | `64 位随机十六进制字符串` |
 
 保存后，在 Worker 的 **Deployments（部署）** 页面重新部署一次，使 Secret 生效。
 
@@ -94,8 +92,6 @@ Linux、macOS、Git Bash 或装有 OpenSSL 的 Windows：
 # 生成 PROXY_SECRET
 openssl rand -hex 16
 
-# 生成 SESSION_SIGNING_KEY
-openssl rand -hex 32
 ```
 
 没有 OpenSSL 时，可以在浏览器开发者工具的 Console 中执行：
@@ -105,9 +101,6 @@ openssl rand -hex 32
 [...crypto.getRandomValues(new Uint8Array(16))]
   .map(x => x.toString(16).padStart(2, "0")).join("")
 
-// SESSION_SIGNING_KEY
-[...crypto.getRandomValues(new Uint8Array(32))]
-  .map(x => x.toString(16).padStart(2, "0")).join("")
 ```
 
 如果希望使用 `dd` Secret，在生成的 32 位 `PROXY_SECRET` 前面加上 `dd`：
@@ -135,7 +128,7 @@ dd0123456789abcdef0123456789abcdef
 | Root directory | `/` |
 
 7. 保存并部署。
-8. 按上一节的方法，在 Worker 设置中添加 `PROXY_SECRET` 和 `SESSION_SIGNING_KEY` 两个 Secret。
+8. 按上一节的方法，在 Worker 设置中添加 `PROXY_SECRET`。
 9. 添加 Secret 后重新部署。
 
 仓库已经包含 `wrangler.toml`，其中声明了 Worker 入口和 Durable Object。不要把该项目当成 Pages 静态网站部署，也不需要填写 `dist` 输出目录。
@@ -166,10 +159,9 @@ npx wrangler login
 
 ```bash
 npx wrangler secret put PROXY_SECRET
-npx wrangler secret put SESSION_SIGNING_KEY
 ```
 
-每条命令执行后，按照终端提示粘贴对应的随机值。然后运行测试和部署：
+命令执行后，按照终端提示粘贴随机值。然后运行测试和部署：
 
 ```bash
 npm test
@@ -288,13 +280,27 @@ base64url(
 
 ## 配置项
 
+> 会话签名密钥由程序使用 `PROXY_SECRET` 进行域隔离派生，不需要额外配置 `SESSION_SIGNING_KEY`，也不会把派生密钥发送给客户端。
+
 | 名称 | 类型 | 默认值 | 说明 |
 |---|---|---:|---|
 | `PROXY_SECRET` | Worker Secret | 无 | 必填。32 位十六进制字符串，可添加 `dd` 前缀。 |
-| `SESSION_SIGNING_KEY` | Worker Secret | 无 | 强烈建议设置，用于签发短期会话凭证。 |
 | `PUBLIC_HOSTNAME` | 环境变量 | 空 | 对外使用的自定义域名，不包含协议。 |
 | `MAX_STREAMS` | 环境变量 | `64` | 每个会话允许的最大逻辑连接数。 |
 | `SESSION_TTL_SECONDS` | 环境变量 | `300` | Bridge Bootstrap 凭证的有效期，单位为秒。 |
+
+## 延迟说明
+
+Telegram 显示的延迟不只是域名 Ping，还包含客户端到 Cloudflare、Worker/Durable Object 调度以及 Cloudflare 到 Telegram 数据中心的链路耗时。不同域名即使都使用 Cloudflare，也可能因运营商路由、接入节点、账号所在 Telegram DC 和冷启动状态产生明显差异。
+
+建议连续观察几次稳定连接后的延迟，不要只看首次连接。项目默认关闭逐帧诊断日志，避免日志序列化增加 CPU 开销；临时排障时可在 Worker 环境变量中设置 `DIAGNOSTICS=1`，排障结束后删除或设为 `0`。
+
+可优先尝试：
+
+- 使用在本地网络路由更好的 Cloudflare 自定义域名；
+- 避免同时开启会改写路由的 VPN、分流或私有 DNS；
+- 分别用移动网络和宽带测试，判断是否为运营商到 Cloudflare 的路由问题；
+- 等连接稳定后再比较延迟，首次连接包含 Session、WebSocket 和 TCP 建连成本。
 
 ## 健康检查
 
@@ -327,7 +333,6 @@ npx wrangler dev
 ## 安全说明
 
 - 不要提交 `.dev.vars`、Secret、会话 Token 或带 Bridge Capability 的完整 URL。
-- `SESSION_SIGNING_KEY` 应与 `PROXY_SECRET` 不同，并使用独立的随机值。
 - Worker 不接受客户端指定的 TCP 目标，只允许连接内置的 Telegram DC 地址。
 - Cloudflare Workers 的 TCP 出站能力、连接数量和运行时限制可能因套餐及地区而异。
 - Cloudflare 或 Telegram 流量受限制的网络环境中，本项目无法保证代理可用性。

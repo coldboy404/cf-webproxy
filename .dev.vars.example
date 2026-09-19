@@ -1,4 +1,3 @@
 # 此文件只用于告诉 Cloudflare「一键部署」页面需要配置哪些 Secret。
 # 请在部署界面中替换为你自己生成的随机值，不要直接使用下面的示例值。
 PROXY_SECRET=0123456789abcdef0123456789abcdef
-SESSION_SIGNING_KEY=replace-with-a-random-64-character-hex-string
