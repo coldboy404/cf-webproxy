@@ -7,3 +7,7 @@ node_modules/
 .xdg/
 .wrangler-dry-run/
 .wrangler-logs/
+bridge.html
+hello.bin
+welcome.bin
+session.headers
