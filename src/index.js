@@ -42,10 +42,17 @@ export class WebProxySession {
     this.closedIds = new Set();
     this.maxStreams = clampInt(env.MAX_STREAMS, 1, 128, 64);
     this.messageChain = Promise.resolve();
+    this.traceId = crypto.randomUUID().slice(0, 8);
+    this.messageCount = 0;
+  }
+
+  trace(event, details = {}) {
+    console.log("webproxy", { traceId: this.traceId, event, ...details });
   }
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === "/internal/ws") this.trace("internal_ws_request", { upgrade: request.headers.get("Upgrade") || "" });
 
     if (url.pathname === "/internal/init" && request.method === "POST") {
       if (this.initialized) return new Response(null, { status: 204 });
@@ -67,14 +74,24 @@ export class WebProxySession {
       const server = pair[1];
       server.accept();
       this.ws = server;
+      this.trace("websocket_accepted");
       server.addEventListener("message", (event) => {
         this.messageChain = this.messageChain
           .then(() => this.onMessage(event.data))
-          .catch(() => this.protocolError());
+          .catch((error) => {
+            this.trace("message_handler_failed", { error: safeError(error) });
+            this.protocolError("message_handler_failed");
+          });
         this.ctx.waitUntil(this.messageChain);
       });
-      server.addEventListener("close", () => this.shutdown());
-      server.addEventListener("error", () => this.shutdown());
+      server.addEventListener("close", (event) => {
+        this.trace("websocket_closed", { code: event.code, reason: event.reason || "", clean: event.wasClean });
+        this.shutdown("websocket_close");
+      });
+      server.addEventListener("error", () => {
+        this.trace("websocket_error");
+        this.shutdown("websocket_error");
+      });
 
       const protocol = request.headers.get("X-TProxy-Protocol") || "";
       return new Response(null, {
@@ -85,7 +102,8 @@ export class WebProxySession {
     }
 
     if (url.pathname === "/internal/close" && request.method === "POST") {
-      this.shutdown();
+      this.trace("session_delete_received");
+      this.shutdown("session_delete");
       return new Response(null, { status: 204 });
     }
 
@@ -93,37 +111,55 @@ export class WebProxySession {
   }
 
   async onMessage(data) {
-    if (this.closed || !(data instanceof ArrayBuffer) || data.byteLength === 0 || data.byteLength > MAX_WS_MESSAGE) {
-      return this.protocolError();
+    if (this.closed) return;
+    if (data instanceof Blob) {
+      if (data.size === 0 || data.size > MAX_WS_MESSAGE) {
+        this.trace("invalid_websocket_message", { kind: "Blob", length: data.size });
+        return this.protocolError("invalid_websocket_message");
+      }
+      data = await data.arrayBuffer();
+    }
+    if (!(data instanceof ArrayBuffer) || data.byteLength === 0 || data.byteLength > MAX_WS_MESSAGE) {
+      this.trace("invalid_websocket_message", { kind: Object.prototype.toString.call(data), length: data?.byteLength ?? null });
+      return this.protocolError("invalid_websocket_message");
     }
 
     let frames;
     try {
       frames = parseFrames(new Uint8Array(data));
-    } catch {
-      return this.protocolError();
+    } catch (error) {
+      this.trace("frame_parse_failed", { length: data.byteLength, error: safeError(error), prefix: hexPrefix(new Uint8Array(data)) });
+      return this.protocolError("frame_parse_failed");
     }
+
+    this.messageCount += 1;
+    this.trace("frames_received", {
+      message: this.messageCount,
+      bytes: data.byteLength,
+      frames: frames.map((frame) => ({ type: frame.type, streamId: frame.streamId, length: frame.payload.length })),
+    });
 
     for (const frame of frames) {
       if (frame.streamId === 0) {
-        if (frame.type !== FRAME.PONG || frame.payload.length > 64) return this.protocolError();
+        if (frame.type !== FRAME.PONG || frame.payload.length > 64) return this.protocolError("invalid_control_frame");
         continue;
       }
       if (frame.type === FRAME.OPEN) await this.openStream(frame);
       else if (frame.type === FRAME.DATA) await this.writeStream(frame);
       else if (frame.type === FRAME.WINDOW) this.addWindow(frame);
       else if (frame.type === FRAME.CLOSE) this.closeStream(frame.streamId, false);
-      else return this.protocolError();
+      else return this.protocolError("unknown_frame_type");
       if (this.closed) return;
     }
   }
 
   async openStream(frame) {
     const id = frame.streamId;
-    if (frame.payload.length !== 0 || this.streams.has(id) || this.closedIds.has(id)) return this.protocolError();
+    if (frame.payload.length !== 0 || this.streams.has(id) || this.closedIds.has(id)) return this.protocolError("invalid_open");
     if (this.streams.size >= this.maxStreams) { this.rememberClosed(id); return this.sendFrame(FRAME.CLOSE, id); }
     const stream = { id, socket:null, writer:null, handshake:new Uint8Array(), receiveWindow:INITIAL_WINDOW, sendCredit:INITIAL_WINDOW, creditWaiters:[], closed:false };
     this.streams.set(id, stream);
+    this.trace("stream_opened", { streamId: id });
   }
 
   async writeStream(frame) {
@@ -140,9 +176,11 @@ export class WebProxySession {
         if (joined.length > 64 + 1024*1024) throw new Error("excess pre-auth data");
         const secret=parseProxySecret(this.env.PROXY_SECRET).inner;
         const client=await acceptClientHandshake(joined.subarray(0,64),secret);
+        this.trace("mtproxy_handshake_accepted", { streamId: stream.id, dcId: client.dcId, tag: client.tag });
         const tg=await createTelegramHandshake(client.tag,client.dcId);
         const socket=connect({hostname:TELEGRAM_DCS[Math.abs(client.dcId)],port:443},{allowHalfOpen:false});
         await socket.opened;
+        this.trace("telegram_dc_connected", { streamId: stream.id, dcId: client.dcId });
         stream.socket=socket; stream.writer=socket.writable.getWriter();
         stream.clientDecrypt=client.clientDecrypt; stream.clientEncrypt=client.clientEncrypt;
         stream.tgEncrypt=tg.encrypt; stream.tgDecrypt=tg.decrypt; stream.handshake=new Uint8Array();
@@ -155,7 +193,10 @@ export class WebProxySession {
         await stream.writer.write(await stream.tgEncrypt.crypt(plain));
       }
       this.grantWindow(stream,length);
-    } catch { this.closeStream(stream.id,true); }
+    } catch (error) {
+      this.trace("stream_write_failed", { streamId: stream.id, stage: stream.writer ? "relay" : "handshake_or_connect", error: safeError(error) });
+      this.closeStream(stream.id,true);
+    }
   }
 
   grantWindow(stream,length) {
@@ -214,6 +255,7 @@ export class WebProxySession {
     this.streams.delete(id);
     this.rememberClosed(id);
     stream.closed = true;
+    this.trace("stream_closed", { streamId: id, notify });
     for (const resolve of stream.creditWaiters.splice(0)) resolve();
     try { stream.writer?.abort(); } catch {}
     try { stream.socket?.close(); } catch {}
@@ -234,13 +276,15 @@ export class WebProxySession {
     }
   }
 
-  protocolError() {
+  protocolError(reason = "protocol_error") {
+    this.trace("protocol_error", { reason });
     this.sendFrame(FRAME.BYE, 0);
-    this.shutdown();
+    this.shutdown(reason);
   }
 
-  shutdown() {
+  shutdown(reason = "shutdown") {
     if (this.closed) return;
+    this.trace("session_shutdown", { reason, streams: this.streams.size });
     this.closed = true;
     for (const id of [...this.streams.keys()]) this.closeStream(id, false);
     try { this.ws?.close(1000, "session closed"); } catch {}
@@ -304,9 +348,17 @@ async function route(request, env) {
     const token = protocol?.slice("tproxy-v1.".length);
     if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return camouflage();
     const stub = env.SESSIONS.get(env.SESSIONS.idFromName(token));
-    return stub.fetch("https://session/internal/ws", {
-      headers: { Upgrade: "websocket", "X-TProxy-Protocol": protocol },
-    });
+    console.log("webproxy", { event: "ws_proxy_start" });
+    try {
+      const response = await stub.fetch("https://session/internal/ws", {
+        headers: { Upgrade: "websocket", "X-TProxy-Protocol": protocol },
+      });
+      console.log("webproxy", { event: "ws_proxy_response", status: response.status, hasWebSocket: Boolean(response.webSocket) });
+      return response;
+    } catch (error) {
+      console.error("webproxy", { event: "ws_proxy_failed", error: safeError(error) });
+      throw error;
+    }
   }
 
   if (url.pathname === "/healthz" && request.method === "GET") {
@@ -500,6 +552,15 @@ function randomToken(bytes) { const value = new Uint8Array(bytes); crypto.getRan
 function hexToBytes(hex) { const out = new Uint8Array(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16); return out; }
 function base64url(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
 function base64urlDecode(value) { const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (value.length % 4)) % 4); const raw = atob(padded); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); }
+function safeError(error) {
+  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 240);
+  return String(error).slice(0, 240);
+}
+
+function hexPrefix(bytes, limit = 16) {
+  return [...bytes.subarray(0, limit)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
 function constantTimeEqual(a, b) { if (a.length !== b.length) return false; let diff = 0; for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i); return diff === 0; }
 
 export const _test = { FRAME, encodeFrame, parseFrames, isHello, exactBridgeQuery };

@@ -22,3 +22,7 @@ SESSION_TTL_SECONDS = "300"
 #   npx wrangler secret put SESSION_SIGNING_KEY
 # PROXY_SECRET: 32 lowercase hex chars, optionally prefixed with dd.
 # ee/FakeTLS secrets are intentionally unsupported by Telegram WEB Proxy mode.
+
+[[routes]]
+pattern = "webproxy.oxo.qzz.io"
+custom_domain = true
