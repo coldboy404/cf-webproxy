@@ -287,10 +287,69 @@ base64url(
 | 名称 | 类型 | 默认值 | 说明 |
 |---|---|---:|---|
 | `PROXY_SECRET` | Worker Secret | 无 | 必填。32 位十六进制字符串，可添加 `dd` 前缀。 |
-| `PUBLIC_HOSTNAME` | 环境变量 | 空 | 对外使用的自定义域名，不包含协议。 |
+| `PUBLIC_HOSTNAME` | 环境变量 | 空 | 主入口域名，不包含协议。留空时接受当前请求域名。 |
+| `PREFERRED_HOSTNAMES` | 环境变量 | 空 | 可选的备用/优选入口域名，多个域名用英文逗号分隔。每个域名都必须已绑定到同一个 Worker 并签发有效证书。 |
 | `MAX_STREAMS` | 环境变量 | `64` | 每个会话允许的最大逻辑连接数。 |
 | `SESSION_TTL_SECONDS` | 环境变量 | `300` | Bridge Bootstrap 凭证的有效期，单位为秒。 |
 
+## 优选域名与优选 IP
+
+本项目采用轻量方案，不提供 Web 面板。你可以给同一个 Worker 绑定多个自定义域名，在不同网络下实测后选择延迟最低的域名作为 Telegram 链接中的 `server`。
+
+### 1. 绑定多个入口域名
+
+在 Cloudflare Worker 的 **Settings → Domains & Routes** 中，把候选域名逐个添加为 Custom Domain。例如：
+
+```text
+proxy-a.example.com
+proxy-b.example.com
+proxy-c.example.com
+```
+
+然后配置允许的入口域名：
+
+```toml
+[vars]
+PUBLIC_HOSTNAME = "proxy-a.example.com"
+PREFERRED_HOSTNAMES = "proxy-b.example.com,proxy-c.example.com"
+MAX_STREAMS = "64"
+SESSION_TTL_SECONDS = "300"
+```
+
+也可以在 Cloudflare 控制台中添加同名环境变量。修改后重新部署。
+
+> 如果 `PUBLIC_HOSTNAME` 和 `PREFERRED_HOSTNAMES` 都留空，Worker 会兼容任意已正确路由到它的请求域名。填写后则会启用域名白名单。
+
+### 2. 在自己的网络中测速
+
+项目提供一个本地测速脚本，只测试 HTTPS 到 Worker `/healthz` 的建连及响应时间，不需要填写 Secret：
+
+```bash
+npm run edge:test -- --hosts proxy-a.example.com,proxy-b.example.com,proxy-c.example.com
+```
+
+也可以把域名逐行写入文本文件：
+
+```bash
+npm run edge:test -- --file hosts.txt --rounds 5
+```
+
+脚本会按中位耗时排序，并输出建议优先测试的 Telegram `server`。请分别在常用宽带和手机网络下运行，因为不同运营商的最优入口可能不同。
+
+### 关于“优选 IP”的重要限制
+
+Telegram Web Proxy 链接只有 `server` 和 `secret`，没有单独指定 TLS SNI/Host 的参数。直接把 `server` 写成 Cloudflare IP，通常会因为 TLS 证书和 SNI 不匹配而无法连接。因此 Worker 代码本身不能强制 Telegram 客户端连接某个 Cloudflare Anycast IP。
+
+EdgeTunnel 中的“优选 IP”主要用于生成 VLESS 等客户端节点地址，或者作为 Worker 的 TCP 出站反代地址；这与 Telegram Web Proxy 的 HTTPS 入口不是同一层，不能直接照搬。
+
+如果要使用第三方优选域名或固定解析 IP，必须同时满足：
+
+1. Telegram 使用的 `server` 域名证书有效；
+2. 该域名已绑定/路由到这个 Worker；
+3. DNS 方案能够保留正确的 TLS SNI 和 Host；
+4. 你信任该 DNS 或优选服务提供方。
+
+更安全、稳定的方式是绑定多个自己控制的域名，用上述脚本筛选，再把表现最好的域名放进 Telegram 链接。
 ## 延迟说明
 
 Telegram 显示的延迟不只是域名 Ping，还包含客户端到 Cloudflare、Worker/Durable Object 调度以及 Cloudflare 到 Telegram 数据中心的链路耗时。不同域名即使都使用 Cloudflare，也可能因运营商路由、接入节点、账号所在 Telegram DC 和冷启动状态产生明显差异。

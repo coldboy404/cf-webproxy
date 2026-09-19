@@ -1,5 +1,6 @@
 import { connect } from "cloudflare:sockets";
 import { TELEGRAM_DCS, parseProxySecret, acceptClientHandshake, createTelegramHandshake } from "./mtproxy.js";
+import { canonicalHost, configuredHosts } from "./config.js";
 
 const FRAME = Object.freeze({
   OPEN: 0x01,
@@ -295,8 +296,10 @@ export class WebProxySession {
 
 async function route(request, env) {
   const url = new URL(request.url);
-  const expectedHost = canonicalHost(env.PUBLIC_HOSTNAME || url.hostname);
-  if (canonicalHost(url.hostname) !== expectedHost) return camouflage();
+  const requestHost = canonicalHost(url.hostname);
+  const allowedHosts = configuredHosts(env);
+  if (allowedHosts.size && !allowedHosts.has(requestHost)) return camouflage();
+  const expectedHost = requestHost;
 
   if (url.pathname === "/" && request.method === "GET") {
     const capability = exactBridgeQuery(url);
@@ -540,7 +543,6 @@ function isBinary(value) {
   return /^application\/octet-stream(?:\s*;.*)?$/i.test(value || "");
 }
 function noStore() { return { "Cache-Control": "no-store" }; }
-function canonicalHost(value) { return String(value || "").trim().toLowerCase().replace(/\.$/, ""); }
 function clampInt(value, min, max, fallback) { const n = Number.parseInt(value, 10); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback; }
 function u32(value) { const out = new Uint8Array(4); new DataView(out.buffer).setUint32(0, value); return out; }
 function randomToken(bytes) { const value = new Uint8Array(bytes); crypto.getRandomValues(value); return base64url(value); }
