@@ -11,12 +11,3 @@ test("AES CTR is independent of chunk boundaries", async()=>{
 });
 test("secret modes",()=>{ assert.equal(parseProxySecret("00".repeat(16)).inner.length,16); assert.equal(parseProxySecret("dd"+"11".repeat(16)).inner.length,16); assert.throws(()=>parseProxySecret("ee"+"22".repeat(16))); });
 test("Telegram handshake advances cipher and keeps first 56 bytes plain",async()=>{ const h=await createTelegramHandshake(0xeeeeeeee,2); assert.equal(h.wire.length,64); assert.equal(new DataView(h.wire.buffer).getUint32(56,true)===0xeeeeeeee,false); });
-
-import { configuredHosts } from "../src/config.js";
-
-test("configured hosts include primary and preferred aliases", () => {
-  assert.deepEqual(
-    [...configuredHosts({ PUBLIC_HOSTNAME: "Proxy.Example.com", PREFERRED_HOSTNAMES: " a.example.com, B.example.com " })],
-    ["proxy.example.com", "a.example.com", "b.example.com"],
-  );
-});

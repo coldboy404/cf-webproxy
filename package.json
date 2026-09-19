@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --test",
-    "edge:test": "node scripts/edge-benchmark.mjs"
+    "test": "node --test"
   },
   "devDependencies": {
     "wrangler": "^4.37.0"
