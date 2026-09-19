@@ -176,6 +176,8 @@ https://cf-webproxy.你的账户名.workers.dev
 
 ### 绑定自定义域名（推荐）
 
+> 仓库的 `wrangler.toml` 不写死任何域名，以便 Fork 后可以在不同的 Cloudflare 账号部署。部署成功后，再在 Cloudflare 控制台绑定你自己的域名。不要把个人域名提交到公共 Fork 的 `[[routes]]`，否则其他账号部署时会出现 `Could not find zone`。
+
 `workers.dev` 域名可以直接使用，但部分网络环境可能无法稳定访问，因此建议绑定一个托管在 Cloudflare 的自定义域名。
 
 1. 进入 Cloudflare 控制台中的 Worker。
