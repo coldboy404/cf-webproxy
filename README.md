@@ -1,3 +1,8 @@
+‼️‼️写在最前面：
+‼️‼️免责声明：
+
+‼️‼️‼️‼️本项目仅供交流学习，禁止搭建公共代理去薅cf羊毛，如果发现账号被限制或者封禁与本项目无关，请自备小号测试❗️❗️❗️❗️❗️
+
 # cf-webproxy
 
 轻量的 Telegram WEB Proxy，支持 **Workers + Durable Objects** 和 **独立 Pages** 两种部署方式，直连 Telegram 数据中心。**无需 VPS、后端 MTProxy 或管理面板，只需配置一个 `PROXY_SECRET`。**
