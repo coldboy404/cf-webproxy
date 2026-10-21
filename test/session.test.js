@@ -1,6 +1,6 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
-import { setImmediate } from "node:timers/promises";
+import { setImmediate, setTimeout as delay } from "node:timers/promises";
 import { RelaySession as WorkerRelaySession, LIMITS, waitFor } from "../src/session.js";
 import { FRAME, INITIAL_WINDOW, MAX_WS_MESSAGE, encodeFrame, parseFrames, u32 } from "../src/protocol.js";
 import { AesCtrStream } from "../src/mtproxy.js";
@@ -14,7 +14,10 @@ function message(...frames) {
   let pos = 0; for (const f of frames) { joined.set(f, pos); pos += f.length; } return joined.buffer;
 }
 async function until(check) {
-  for (let i = 0; i < 100; i++) { if (check()) return; await setImmediate(); }
+  // WebCrypto runs in the thread pool: a fixed number of immediate turns can
+  // expire before real I/O gets CPU on busy CI. Use an actual bounded deadline.
+  const deadline = performance.now() + 2000;
+  while (performance.now() < deadline) { if (check()) return; await delay(1); }
   assert.fail("condition did not become true");
 }
 for (const RelaySession of [WorkerRelaySession, PagesRelaySession]) describe(RelaySession.name, () => {

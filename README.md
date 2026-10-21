@@ -104,6 +104,12 @@ Windows PowerShell 若提示禁止运行 `npx.ps1`，将 `npx` / `npm` 替换为
 
 **无需修改 `wrangler.toml` 或填写 `PUBLIC_HOSTNAME`。** 不要将个人域名写入公共仓库的 `[[routes]]`，以免其他账号 Fork 后部署失败。
 
+### 优选域名与可选 KWS 出站
+
+支持自定义域名、多个入口白名单，以及可选 Telegram 官方 KWS WebSocket 出站（`RELAY_TRANSPORT=kws`，实验性）。默认仍为 TCP，不改变现有部署和密钥。优选属于 DNS / SaaS 配置，不是把任意优选域名填入 Telegram。
+
+**配置步骤、限制和回退方法见 [优选入口与 KWS 指南](./docs/preferred-domains.md)。**
+
 ## 2. 添加到 Telegram
 
 在支持 WEB Proxy 的 Telegram Android 客户端中打开：
@@ -123,7 +129,9 @@ https://t.me/webproxy?server=你的域名&secret=你的PROXY_SECRET
 | 名称 | 默认值 | 用途 |
 |---|---|---|
 | `PROXY_SECRET` | 必填，使用 Secret 类型 | 代理密钥，格式见部署说明。 |
-| `PUBLIC_HOSTNAME` | 空 | 可选，限制入口域名；不含协议或路径。为空时使用请求主机名。 |
+| `PUBLIC_HOSTNAME` | 空 | 可选，严格限制单个入口域名；不含协议或路径。为空时使用请求主机名。 |
+| `ALLOWED_HOSTNAMES` | 空 | 可选，多入口白名单，逗号分隔 DNS 域名。不会创建 DNS / 证书。与 `PUBLIC_HOSTNAME` 同设时取交集。 |
+| `RELAY_TRANSPORT` | `tcp` | `tcp` 直连 DC；`kws` 使用 Telegram 官方 KWS（实验性）。 |
 | `MAX_STREAMS` | `64` | 每个会话的最大逻辑连接数。 |
 | `SESSION_TTL_SECONDS` | `300` | Bootstrap 凭证有效期（秒），不是已建立连接的时长上限。 |
 | `DIAGNOSTICS` | 关闭 | 设为 `1` 开启诊断日志；排障后删除或设为 `0`。 |
@@ -140,7 +148,7 @@ https://t.me/webproxy?server=你的域名&secret=你的PROXY_SECRET
 {"ok":true,"carrier":"websocket","relay":"direct-telegram-dc"}
 ```
 
-此接口**仅检查 HTTP 入口**，不验证会话或 Telegram DC 连通性。直接访问根路径不会显示代理管理面板，这是正常行为。
+`/health` 是等价别名；KWS 模式的 `relay` 为 `telegram-kws`。密钥或出站配置无效时返回 500。此接口**仅检查配置及 HTTP 入口**，不验证会话或 Telegram 连通性。直接访问根路径不会显示代理管理面板，这是正常行为。
 
 | 问题 | 检查方法 |
 |---|---|

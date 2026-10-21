@@ -1,0 +1,24 @@
+name: Tests and builds
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            pages/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm ci --prefix pages
+      - run: npm run test:pages
+      - run: npx wrangler deploy --dry-run --outdir .wrangler-dry-run

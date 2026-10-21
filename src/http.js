@@ -1,6 +1,7 @@
 import { FRAME, encodeFrame, parseFrames, clampInt } from "./protocol.js";
 import { bridgePage } from "./bridge.js";
 import { hmac } from "./auth.js";
+import { entranceHost, validateConfig } from "./config.js";
 
 // Both deployment targets share authentication, HTTP framing and the Bridge.
 export function createProxyHandler(backend) {
@@ -18,8 +19,21 @@ export function createProxyHandler(backend) {
 
 async function route(request, env, ctx, backend) {
   const url = new URL(request.url);
-  const expectedHost = canonicalHost(env.PUBLIC_HOSTNAME || url.hostname);
-  if (canonicalHost(url.hostname) !== expectedHost) return camouflage();
+  let expectedHost, transport;
+  try {
+    expectedHost = entranceHost(env, url.hostname);
+    if (!expectedHost) return camouflage();
+    transport = validateConfig(env);
+  } catch {
+    return url.pathname === "/healthz" || url.pathname === "/health"
+      ? Response.json({ ok: false, error: "invalid_configuration" }, { status: 500, headers: noStore() })
+      : camouflage();
+  }
+  // Keep the Bridge, session and WebSocket on the actual entrance hostname.
+  // A CNAME target / X-Forwarded-Host must never replace the signed hostname.
+  if (url.pathname === "/api/v1/session" || url.pathname === "/api/v1/ws") {
+    if (request.headers.has("Origin") && request.headers.get("Origin") !== url.origin) return camouflage();
+  }
 
   if (url.pathname === "/" && request.method === "GET") {
     const capability = exactBridgeQuery(url);
@@ -59,7 +73,7 @@ async function route(request, env, ctx, backend) {
     });
   }
 
-  if (url.pathname === "/api/v1/ws" && request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
+  if (url.pathname === "/api/v1/ws" && request.method === "GET" && !request.headers.has("Cookie") && request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
     const protocols = (request.headers.get("Sec-WebSocket-Protocol") || "").split(",").map((v) => v.trim());
     const protocol = protocols.find((v) => v.startsWith("tproxy-v1."));
     const token = protocol?.slice("tproxy-v1.".length);
@@ -67,8 +81,8 @@ async function route(request, env, ctx, backend) {
     return backend.attach(env, token, protocol, ctx);
   }
 
-  if (url.pathname === "/healthz" && request.method === "GET") {
-    return Response.json({ ok: true, carrier: "websocket", relay: "direct-telegram-dc" }, { headers: noStore() });
+  if ((url.pathname === "/healthz" || url.pathname === "/health") && request.method === "GET") {
+    return Response.json({ ok: true, carrier: "websocket", relay: transport === "kws" ? "telegram-kws" : "direct-telegram-dc" }, { headers: noStore() });
   }
 
   return camouflage();
@@ -178,7 +192,6 @@ function isBinary(value) {
   return /^application\/octet-stream(?:\s*;.*)?$/i.test(value || "");
 }
 function noStore() { return { "Cache-Control": "no-store" }; }
-function canonicalHost(value) { return String(value || "").trim().toLowerCase().replace(/\.$/, ""); }
 function randomToken(bytes) { const value = new Uint8Array(bytes); crypto.getRandomValues(value); return base64url(value); }
 function hexToBytes(hex) { const out = new Uint8Array(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16); return out; }
 function base64url(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }

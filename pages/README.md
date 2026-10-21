@@ -55,7 +55,7 @@ https://t.me/webproxy?server=你的域名&secret=你的PROXY_SECRET
 - 生产分支 `main` 的新提交会触发 Pages Git 部署；Fork 用户需要先同步仓库。在 Pages 的 **Deployments** 中核对提交 ID 和成功状态，不要仅凭 GitHub 推送成功判断已更新。
 - 若设置了构建监听路径，务必包含 `pages/*` 和 `src/*`；初次部署建议保留默认监听所有文件。
 - 密钥、代码或域名更新后，在 Telegram 中关闭再开启代理，重新建立会话。
-- 访问 `https://你的域名/healthz` 应返回 `{"ok":true,"carrier":"websocket","relay":"direct-telegram-dc"}`。这只证明 HTTP 入口可用，**不代表鉴权或 Telegram 链路正常**。
+- 访问 `https://你的域名/healthz` 应返回 `{"ok":true,"carrier":"websocket","relay":"direct-telegram-dc"}`。`/health` 等价；KWS 模式的 `relay` 为 `telegram-kws`。密钥或出站配置无效返回 500。这只证明配置及 HTTP 入口可用，**不代表会话鉴权或 Telegram 链路正常**。
 - 根路径只显示 Welcome，没有管理面板是正常的。排障可临时设置 `DIAGNOSTICS=1`，重新部署后查看 Pages Functions 实时日志；完成后关闭。
 - 不要公开真实密钥、会话 Token 或完整 Bridge URL。
 
@@ -64,6 +64,8 @@ https://t.me/webproxy?server=你的域名&secret=你的PROXY_SECRET
 | 名称 | 默认值 | 用途 |
 |---|---|---|
 | `PUBLIC_HOSTNAME` | 空 | 限制入口域名，不含协议或路径；为空时使用请求域名。 |
+| `ALLOWED_HOSTNAMES` | 空 | 可选多入口白名单，逗号分隔；与 `PUBLIC_HOSTNAME` 同设时取交集。 |
+| `RELAY_TRANSPORT` | `tcp` | 可选 `kws` Telegram 官方 KWS 出站（实验性），见 [完整指南](../docs/preferred-domains.md)。 |
 | `MAX_STREAMS` | `64` | 每个 WebSocket 会话的最大逻辑连接数。 |
 | `SESSION_TTL_SECONDS` | `300` | Bootstrap 凭证有效期，不是 WebSocket 接入票据或已建立连接的时长。 |
 | `DIAGNOSTICS` | 关闭 | 设为 `1` 开启诊断日志。 |

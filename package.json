@@ -10,7 +10,7 @@
     "test:pages": "npm run build --prefix pages && node pages/smoke.mjs"
   },
   "devDependencies": {
-    "wrangler": "^4.37.0"
+    "wrangler": "^4.151.3"
   },
   "cloudflare": {
     "bindings": {

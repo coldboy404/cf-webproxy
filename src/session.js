@@ -1,4 +1,5 @@
 import { TELEGRAM_DCS, parseProxySecret, acceptClientHandshake, createTelegramHandshake } from "./mtproxy.js";
+import { connectKws, PacketFramer, relayTransport } from "./kws.js";
 import { FRAME, HEADER_SIZE, INITIAL_WINDOW, DATA_CHUNK, MAX_WS_MESSAGE, encodeFrame, parseFrames, clampInt, u32 } from "./protocol.js";
 
 // Bounds include frame headers and an allowance for each retained queue item.
@@ -23,10 +24,12 @@ export const LIMITS = Object.freeze({
 // The Workers entrypoint supplies cloudflare:sockets.connect. Keeping the
 // transport injectable lets tests exercise real framing/crypto with fake I/O.
 export class RelaySession {
-  constructor(ctx, env, connect) {
+  constructor(ctx, env, connect, kwsConnect = connectKws) {
     this.ctx = ctx;
     this.env = env;
     this.connect = connect;
+    this.transport = relayTransport(env);
+    this.kwsConnect = kwsConnect;
     this.initialized = false;
     this.closed = false;
     this.ws = null;
@@ -284,7 +287,9 @@ export class RelaySession {
       this.active(stream);
       clearTimeout(stream.handshakeTimer); stream.handshakeTimer = null;
       const started = this.diagnostics ? Date.now() : 0;
-      const socket = this.connect({ hostname: TELEGRAM_DCS[Math.abs(client.dcId)], port: 443 }, { allowHalfOpen: false });
+      const socket = this.transport === "kws"
+        ? this.kwsConnect(client.dcId, { signal: stream.abort.signal })
+        : this.connect({ hostname: TELEGRAM_DCS[Math.abs(client.dcId)], port: 443 }, { allowHalfOpen: false });
       stream.socket = socket; // Track before awaiting: CLOSE must cancel in-flight dials.
       Promise.resolve(socket.closed).catch(() => {});
       await waitFor(socket.opened, stream.abort.signal, LIMITS.connectTimeout, "connect timeout");
@@ -293,6 +298,7 @@ export class RelaySession {
       stream.writer = socket.writable.getWriter();
       stream.clientDecrypt = client.clientDecrypt; stream.clientEncrypt = client.clientEncrypt;
       stream.tgEncrypt = tg.encrypt; stream.tgDecrypt = tg.decrypt;
+      if (this.transport === "kws") stream.packetFramer = new PacketFramer(client.tag);
       stream.handshake = new Uint8Array();
       await waitFor(stream.writer.write(tg.wire), stream.abort.signal, LIMITS.writeTimeout, "write timeout");
       this.active(stream);
@@ -305,9 +311,14 @@ export class RelaySession {
     for (let offset = 0; offset < payload.length; offset += DATA_CHUNK) {
       const plain = await stream.clientDecrypt.crypt(payload.subarray(offset, offset + DATA_CHUNK));
       this.active(stream);
-      const encrypted = await stream.tgEncrypt.crypt(plain);
-      this.active(stream);
-      await waitFor(stream.writer.write(encrypted), stream.abort.signal, LIMITS.writeTimeout, "write timeout");
+      const send = async packet => {
+        this.active(stream);
+        const encrypted = await stream.tgEncrypt.crypt(packet);
+        this.active(stream);
+        await waitFor(stream.writer.write(encrypted), stream.abort.signal, LIMITS.writeTimeout, "write timeout");
+      };
+      if (stream.packetFramer) await stream.packetFramer.push(plain, send);
+      else await send(plain);
       this.active(stream);
     }
     this.grantWindow(stream, grant);
@@ -410,6 +421,7 @@ export class RelaySession {
     stream.abort.abort();
     for (let i = stream.queueHead; i < stream.queue.length; i++) this.releaseWrite(stream, stream.queue[i]);
     stream.queue = []; stream.queueHead = 0; stream.handshake = new Uint8Array();
+    stream.packetFramer?.reset();
     this.downlinkBytes -= stream.downlinkBytes; this.downlinkItems -= stream.downlinkItems;
     stream.downlinkBytes = 0; stream.downlinkItems = 0; stream.sent = []; stream.sentHead = 0;
     this.wakeDownlink();
