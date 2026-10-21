@@ -1,4 +1,4 @@
-import { hmac } from "./auth.js";
+import { hmac } from "../auth.js";
 
 // A short attachment window limits replay without pretending to have a global
 // one-use registry. Established WebSockets are NOT closed when this expires.

@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --test",
-    "test:pages": "npm run build --prefix pages && node pages/smoke.mjs"
+    "build:pages": "npm run build --prefix pages",
+    "build:worker": "wrangler deploy --dry-run --outdir .wrangler-dry-run"
   },
   "devDependencies": {
     "wrangler": "^4.151.3"

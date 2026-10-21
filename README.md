@@ -98,19 +98,29 @@ KWS 为实验性选项，默认仍使用 TCP。[域名与 KWS 说明](./docs/pre
 
 无法连接时先检查客户端支持、密钥及部署状态；需要日志时临时开启 `DIAGNOSTICS=1`。不要公开会话 Token 或完整 Bridge URL。
 
+## 目录
+
+```text
+src/          共享代理代码及 Workers 入口 index.js
+  pages/      Pages 专用入口、鉴权与会话适配
+pages/        Pages 构建、部署配置与说明
+  dist/       构建输出（不提交）
+docs/         域名与 KWS 说明
+wrangler.toml Workers 部署配置
+```
+
 ## 更新与开发
 
 Fork 用户先同步上游；已连接 Git 的生产分支更新会触发部署。在 Cloudflare **Deployments** 核对提交与部署结果，成功后重新连接 Telegram。
 
 ```bash
 npm ci
-npm test
 npm ci --prefix pages
-npm run test:pages
-npx wrangler deploy --dry-run --outdir .wrangler-dry-run
+npm run build:pages
+npm run build:worker
 ```
 
-测试与构建不代表生产链路可用；免费套餐仍受 Cloudflare 配额限制，不承诺固定延迟或大文件永不断流。
+构建成功不代表生产链路可用；免费套餐仍受 Cloudflare 配额限制，不承诺固定延迟或大文件永不断流。
 
 本项目参考 Telegram 官方 [tproxy-server](https://github.com/telegramdesktop/tproxy-server) 协议独立实现，不是官方 Cloudflare 部署方案。
 

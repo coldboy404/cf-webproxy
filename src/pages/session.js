@@ -1,5 +1,5 @@
-import { RelaySession } from "./session.js";
-import { createPagesToken, verifyPagesToken } from "./pages-auth.js";
+import { RelaySession } from "../session.js";
+import { createPagesToken, verifyPagesToken } from "./auth.js";
 
 // One instance per incoming WebSocket request; never put live sockets in a
 // module-global Map (Cloudflare may send other requests to another isolate).

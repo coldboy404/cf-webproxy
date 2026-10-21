@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const out = new URL("./dist/", import.meta.url);
 await mkdir(out, { recursive: true });
 await build({
-  entryPoints: [fileURLToPath(new URL("../src/pages.js", import.meta.url))],
+  entryPoints: [fileURLToPath(new URL("../src/pages/index.js", import.meta.url))],
   outfile: fileURLToPath(new URL("_worker.js", out)),
   bundle: true,
   format: "esm",
