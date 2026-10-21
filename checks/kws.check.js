@@ -75,7 +75,9 @@ class FakeWebSocket extends EventTarget {
   fail() { this.dispatchEvent(new Event("error")); }
 }
 async function until(check) {
-  for (let i = 0; i < 200; i++) { if (check()) return; await setImmediate(); }
+  // WebCrypto completion is not bounded by a count of event-loop turns.
+  const deadline = performance.now() + 3000;
+  while (performance.now() < deadline) { if (check()) return; await setImmediate(); }
   assert.fail("condition did not become true");
 }
 function socket(t, options = {}) {
