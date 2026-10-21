@@ -2,6 +2,8 @@
 
 独立 Pages 版本，无需额外 Worker、Durable Object、KV 或 D1。支持 TCP 与可选 KWS 出站。
 
+单文件入口：[`_worker.js`](./_worker.js)，无本地源码依赖。下面的 Git 部署流程无需改变，构建会自动生成该文件并复制到 `dist`。维护源码仍保留在 `src/`，校验仍保留在 `checks/`。
+
 ## 1. 创建项目
 
 Cloudflare → **Workers & Pages → 创建应用 → Pages → 连接 Git**，选择本仓库或 Fork：

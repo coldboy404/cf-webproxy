@@ -4,6 +4,13 @@
 
 > 仅供交流学习，禁止搭建公共代理滥用 Cloudflare 资源。请遵守相关法律与服务条款，账号限制或封禁风险自行承担。
 
+## 单文件部署
+
+- **Workers：[`worker.js`](./worker.js)**，已合并全部代理代码；仍需配置 `PROXY_SECRET`、`SESSIONS` Durable Object 绑定及 `WebProxySession` 迁移，仓库 `wrangler.toml` 已包含绑定和迁移。不能只粘贴 JS、遗漏 DO 配置。
+- **Pages：[`pages/_worker.js`](./pages/_worker.js)**，无需 DO。Git 部署继续使用下方配置；也可将此文件以 `_worker.js` 为名放在部署目录根部，添加 `index.html` 占位文件，再用 `npx wrangler pages deploy 目录 --project-name 你的项目名` 上传（不要使用 Workers 的在线编辑器）。
+
+两个文件均无本地源码依赖，仅使用 Cloudflare 内置 API。维护源码和校验保留在仓库；修改源码后运行 `npm ci --prefix pages && npm run bundle` 更新单文件，不要直接编辑生成文件。Pages Git 构建会自动重新生成。
+
 ## 1. 部署
 
 ### Pages
@@ -101,9 +108,10 @@ KWS 为实验性选项，默认仍使用 TCP。[域名与 KWS 说明](./docs/pre
 ## 目录
 
 ```text
-src/          共享代理代码及 Workers 入口 index.js
+worker.js     Workers 单文件部署入口
+src/          可维护源码（不需要逐个上传）
   pages/      Pages 专用入口、鉴权与会话适配
-pages/        Pages 构建、部署配置与说明
+pages/        Pages 单文件 _worker.js、构建与配置
   dist/       构建输出（不提交）
 checks/       自动校验（*.check.js）
 docs/         域名与 KWS 说明

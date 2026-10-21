@@ -20,5 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm ci --prefix pages
+      - run: npm run bundle
+      - run: git diff --exit-code -- worker.js pages/_worker.js
       - run: npm run check:pages
       - run: npx wrangler deploy --dry-run --outdir .wrangler-dry-run
