@@ -1,4 +1,4 @@
-// cf-webproxy | MIT | Generated deployment file; edit src/ and run npm run bundle.
+// cf-webproxy | MIT | Standalone Workers entrypoint.
 // Configure PROXY_SECRET; optional RELAY_TRANSPORT=kws. Never put secrets in this file.
 
 // src/index.js

@@ -4,9 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bundle": "node pages/bundle.mjs",
-    "check": "node --test checks/*.check.js",
-    "check:pages": "npm run build:pages && node pages/check.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "build:pages": "npm run build --prefix pages",

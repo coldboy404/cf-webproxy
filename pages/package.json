@@ -4,6 +4,5 @@
   "private": true,
   "type": "module",
   "scripts": { "build": "node build.mjs" },
-  "engines": { "node": ">=22.15.0" },
-  "devDependencies": { "esbuild": "0.28.1" }
+  "engines": { "node": ">=22.15.0" }
 }
