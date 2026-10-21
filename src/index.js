@@ -26,6 +26,8 @@ export default createProxyHandler({
   },
 });
 
+export { _check } from "./http.js";
+
 export class WebProxySession extends RelaySession {
   constructor(ctx, env) { super(ctx, env, connect); }
 }

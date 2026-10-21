@@ -73,7 +73,8 @@ Pages 接入票据有效期为 60 秒，**不会因此中断已建立连接**；
 ```bash
 npm ci
 npm ci --prefix pages
-npm run build:pages
+npm run check
+npm run check:pages
 ```
 
 构建只生成部署文件，不能替代 Telegram 实际收发验证。Windows PowerShell 如拦截脚本，使用 `npm.cmd`。

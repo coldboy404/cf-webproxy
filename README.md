@@ -105,6 +105,7 @@ src/          共享代理代码及 Workers 入口 index.js
   pages/      Pages 专用入口、鉴权与会话适配
 pages/        Pages 构建、部署配置与说明
   dist/       构建输出（不提交）
+checks/       自动校验（*.check.js）
 docs/         域名与 KWS 说明
 wrangler.toml Workers 部署配置
 ```
@@ -116,7 +117,8 @@ Fork 用户先同步上游；已连接 Git 的生产分支更新会触发部署�
 ```bash
 npm ci
 npm ci --prefix pages
-npm run build:pages
+npm run check
+npm run check:pages
 npm run build:worker
 ```
 
