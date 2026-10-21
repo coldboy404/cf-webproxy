@@ -8,6 +8,7 @@ for (const [entry, output] of [
   ["../src/pages/index.js", "./_worker.js"],
 ]) {
   await build({
+    absWorkingDir: fileURLToPath(new URL("../", import.meta.url)),
     entryPoints: [fileURLToPath(new URL(entry, import.meta.url))],
     outfile: fileURLToPath(new URL(output, import.meta.url)),
     bundle: true,

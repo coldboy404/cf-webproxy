@@ -1,10 +1,10 @@
 // cf-webproxy | MIT | Generated deployment file; edit src/ and run npm run bundle.
 // Configure PROXY_SECRET; optional RELAY_TRANSPORT=kws. Never put secrets in this file.
 
-// ../src/pages/index.js
+// src/pages/index.js
 import { connect } from "cloudflare:sockets";
 
-// ../src/protocol.js
+// src/protocol.js
 var FRAME = Object.freeze({
   OPEN: 1,
   DATA: 2,
@@ -57,7 +57,7 @@ function clampInt(value, min, max, fallback) {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
-// ../src/bridge.js
+// src/bridge.js
 function bridgePage(host, bootstrap) {
   const scriptNonce = randomNonce();
   const config = JSON.stringify({ origin: `https://${host}`, bootstrap, batchLimit: MAX_WS_MESSAGE, maxPendingItems: 1024, connectTimeout: 15e3, sendHighWater: 512 * 1024, sendRetry: 10, writeTimeout: 3e4 });
@@ -176,7 +176,7 @@ function randomNonce() {
   return btoa(String.fromCharCode(...bytes));
 }
 
-// ../src/auth.js
+// src/auth.js
 function createHmacSigner(subtle = crypto.subtle, maxKeys = 4) {
   if (!Number.isInteger(maxKeys) || maxKeys < 1) throw new RangeError("invalid key cache limit");
   const keys = /* @__PURE__ */ new Map();
@@ -198,7 +198,7 @@ function createHmacSigner(subtle = crypto.subtle, maxKeys = 4) {
 }
 var hmac = createHmacSigner();
 
-// ../src/config.js
+// src/config.js
 function canonicalHost(value) {
   const host = String(value || "").trim().toLowerCase().replace(/\.$/, "");
   if (host.length > 253 || !host.includes(".") || host.split(".").some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
@@ -223,7 +223,7 @@ function validateConfig(env) {
   return transport;
 }
 
-// ../src/http.js
+// src/http.js
 function createProxyHandler(backend) {
   return {
     async fetch(request, env, ctx) {
@@ -406,7 +406,7 @@ function constantTimeEqual(a, b) {
   return diff === 0;
 }
 
-// ../src/mtproxy.js
+// src/mtproxy.js
 var TAGS = /* @__PURE__ */ new Set([4025479151, 4008636142, 3722304989]);
 var TELEGRAM_DCS = Object.freeze({ 1: "149.154.175.50", 2: "149.154.167.51", 3: "149.154.175.100", 4: "149.154.167.91", 5: "149.154.171.5" });
 var AesCtrStream = class {
@@ -513,7 +513,7 @@ function reserved(n) {
   return n[0] === 239 || x === 1145128264 || x === 1414745936 || x === 542393671 || x === 4008636142 || x === 3722304989 || v.getUint32(4, true) === 0;
 }
 
-// ../src/kws.js
+// src/kws.js
 var KWS_LIMITS = Object.freeze({
   openTimeout: 1e4,
   writeTimeout: 3e4,
@@ -778,7 +778,7 @@ function connectKws(dcId, options = {}) {
   } };
 }
 
-// ../src/session.js
+// src/session.js
 var LIMITS = Object.freeze({
   itemCost: 256,
   ingressBytes: 8 * 1024 * 1024,
@@ -1303,7 +1303,7 @@ function safeError(error) {
   return error instanceof Error ? error.name + ": " + error.message.slice(0, 160) : "I/O error";
 }
 
-// ../src/pages/auth.js
+// src/pages/auth.js
 var PAGES_ATTACH_TTL_SECONDS = 60;
 var encoder = new TextEncoder();
 function validSecret(env) {
@@ -1341,7 +1341,7 @@ async function verifyPagesToken(env, host, token) {
   return diff === 0;
 }
 
-// ../src/pages/session.js
+// src/pages/session.js
 var PagesRelaySession = class extends RelaySession {
   shutdown(reason = "shutdown") {
     super.shutdown(reason, false);
@@ -1366,7 +1366,7 @@ function createPagesBackend(connect2) {
   };
 }
 
-// ../src/pages/index.js
+// src/pages/index.js
 var index_default = createProxyHandler(createPagesBackend(connect));
 export {
   index_default as default
