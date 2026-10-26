@@ -31,7 +31,7 @@ Telegram WEB Proxy，无需 VPS 或后端 MTProxy，支持 TCP / KWS 出站。
 
 ## GitHub Actions 自动部署
 
-仓库已提供 [Deploy to Cloudflare](./.github/workflows/deploy-cloudflare.yml)：推送到 `main` 自动运行，也可在 **Actions → Deploy to Cloudflare → Run workflow** 手动运行。默认部署 **Pages**；也支持切换为 Workers，单次只部署一种。
+仓库已提供 [Deploy to Cloudflare](./.github/workflows/deploy-cloudflare.yml)：推送到 `main` 自动运行，也可在 **Actions → Deploy to Cloudflare → Run workflow** 手动运行。默认部署 **Workers**；也支持切换为 Pages，单次只部署一种。
 
 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 配置：
 
@@ -42,7 +42,7 @@ Telegram WEB Proxy，无需 VPS 或后端 MTProxy，支持 TCP / KWS 出站。
 
 **Variables：**
 
-- `CLOUDFLARE_DEPLOY_TARGET`：`pages`（默认）或 `workers`。
+- `CLOUDFLARE_DEPLOY_TARGET`：`workers`（默认，无需填写）或 `pages`。Workers 模式不需要配置 Pages 项目名。
 - `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 模式必填，填写**已有 Pages 项目的准确名称**，不是域名；工作流不会自动新建项目。生产分支应为 `main`。
 
 **部署前先在 Cloudflare 目标项目设置加密变量 `PROXY_SECRET`**，格式见下节。工作流不会将代理密钥写入代码或日志。Workers 模式使用根目录 `wrangler.toml`，目标名称为 `cf-webproxy`，保留 Dashboard 上已有普通变量和 Secrets；Pages 模式部署 `page.js` 构建结果，并使用该 Pages 项目的生产环境变量。

@@ -38,7 +38,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DEPLOY_TARGET: ${{ vars.CLOUDFLARE_DEPLOY_TARGET || 'pages' }}
+          DEPLOY_TARGET: ${{ vars.CLOUDFLARE_DEPLOY_TARGET || 'workers' }}
           PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
         shell: bash
         run: |
@@ -69,7 +69,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WRANGLER_SEND_METRICS: 'false'
-      DEPLOY_TARGET: ${{ vars.CLOUDFLARE_DEPLOY_TARGET || 'pages' }}
+      DEPLOY_TARGET: ${{ vars.CLOUDFLARE_DEPLOY_TARGET || 'workers' }}
       PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
     steps:
       - uses: actions/checkout@v4
