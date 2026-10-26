@@ -29,6 +29,28 @@ Telegram WEB Proxy，无需 VPS 或后端 MTProxy，支持 TCP / KWS 出站。
 
 手动部署时也必须将 `page.js` 重命名为 `_worker.js`，放入部署目录根部；不要粘贴进 Workers 编辑器。
 
+## GitHub Actions 自动部署
+
+仓库已提供 [Deploy to Cloudflare](./.github/workflows/deploy-cloudflare.yml)：推送到 `main` 自动运行，也可在 **Actions → Deploy to Cloudflare → Run workflow** 手动运行。默认部署 **Pages**；也支持切换为 Workers，单次只部署一种。
+
+在 GitHub 仓库 **Settings → Secrets and variables → Actions** 配置：
+
+**Secrets：**
+
+- `CLOUDFLARE_API_TOKEN`：Cloudflare API Token，仅授权目标账户。Pages 部署需要 **Account → Cloudflare Pages → Edit**；Workers 部署需要 **Account → Workers Scripts → Edit**。绑定自定义域名等额外资源时，按 Cloudflare 提示补充权限。
+- `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID（不是 Zone ID）。
+
+**Variables：**
+
+- `CLOUDFLARE_DEPLOY_TARGET`：`pages`（默认）或 `workers`。
+- `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 模式必填，填写**已有 Pages 项目的准确名称**，不是域名；工作流不会自动新建项目。生产分支应为 `main`。
+
+**部署前先在 Cloudflare 目标项目设置加密变量 `PROXY_SECRET`**，格式见下节。工作流不会将代理密钥写入代码或日志。Workers 模式使用根目录 `wrangler.toml`，目标名称为 `cf-webproxy`，保留 Dashboard 上已有普通变量和 Secrets；Pages 模式部署 `page.js` 构建结果，并使用该 Pages 项目的生产环境变量。
+
+尚未配置 Cloudflare 凭据时，工作流只做语法与构建检查，部署 job 会明确显示 **Skipped**；这不表示已经部署。配置好后手动运行或再次推送即可。
+
+如果原来已启用 Cloudflare 的 Git 自动部署，切换到 Actions 后请在 Cloudflare 项目 **Settings → Builds & deployments** 关闭相应 Git 自动构建，避免同一次推送重复部署。Pages 生产环境修改变量后也可手动重新运行此工作流。
+
 ## Workers 部署
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/coldboy404/cf-webproxy)
