@@ -8,12 +8,12 @@
 
 先[部署本项目](../README.md)，设置 `PROXY_SECRET`。准备两个已接入 Cloudflare 的自有域名，以及一个第三方优选域名。
 
-以下只是示意名称，**全部换成自己的，不要直接使用**：
+以下 `a.com` / `b.com` 只是示意名称，**换成自己的域名，不要直接使用**：
 
 - 访问入口：`t.a.com`
 - 回退源站：`t.b.com`
 - 中间域名：`yx.b.com`
-- 第三方优选域名：使用你选定的提供方域名。
+- 第三方优选域名：`cf.090227.xyz`（示例，也可换成其他提供方）。
 
 Worker 与 `b.com` 建议位于同一 Cloudflare 账户。
 
@@ -36,7 +36,7 @@ t.b.com
 ```text
 类型：CNAME
 名称：yx
-目标：你的第三方优选域名
+目标：cf.090227.xyz
 代理：仅 DNS（灰云）
 ```
 
@@ -69,7 +69,7 @@ t.b.com
 最终 DNS 链：
 
 ```text
-t.a.com → yx.b.com → 第三方优选域名 → 优选 IP
+t.a.com → yx.b.com → cf.090227.xyz → 优选 IP
 ```
 
 **不要省略 `yx.b.com` 直接指向第三方**，否则 SaaS 可能显示 `Moved / custom hostname does not CNAME to this zone`。中间域名只是 DNS 别名，不会额外增加一台转发服务器。
