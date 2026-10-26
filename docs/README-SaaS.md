@@ -2,174 +2,114 @@
 
 [返回主 README](../README.md)
 
-适用于本项目 **Workers 版**：用 Cloudflare for SaaS 自定义主机名接入 Worker，再通过中间 CNAME 获取第三方优选 IP。不是 Pages 优选教程，也不是自动测速工具。
+基本就是普通网站的 SaaS 优选配置，区别是：**源站换成 Worker，并额外添加一条 Worker 路由，不需要 VPS、源站证书或反向代理。** 本教程适用于 Workers 版，不适用于 Pages。
 
-> 本方案优化的是「客户端 → Cloudflare」入口，不改变「Worker → Telegram」出站。第三方线路不保证速度、可达性或长期稳定；遵守 Cloudflare 使用条款，不要搭建公共代理。
+## 准备
 
-## 1. 准备域名
+先[部署本项目](../README.md)，设置 `PROXY_SECRET`。准备两个已接入 Cloudflare 的自有域名，以及一个第三方优选域名。
 
-需要两个自己控制的 Cloudflare 域名服务区，以及一个第三方优选域名。建议 Worker 和 SaaS 服务区在同一账户。
+以下只是示意名称，**全部换成自己的，不要直接使用**：
 
-以下全部使用保留示例域名 `example.com` / `example.net`，仅用于说明结构，并非可用服务；**部署时请替换为你自己控制的域名**：
+- 访问入口：`t.a.com`
+- 回退源站：`t.b.com`
+- 中间域名：`yx.b.com`
+- 第三方优选域名：使用你选定的提供方域名。
 
-| 角色 | 示例 | 用途 |
-|---|---|---|
-| 访问域名 | `t.example.com` | Telegram 客户端填写的入口 |
-| 回退源站域名 | `t.example.net` | 已绑定 `cf-webproxy` Worker Custom Domain |
-| 中间优选域名 | `tg.example.net` | 属于 SaaS 服务区，CNAME 到第三方优选域名 |
-| 第三方优选域名 | `优选提供方给出的域名` | 提供候选 Cloudflare IP；需自行验证 |
+Worker 与 `b.com` 建议位于同一 Cloudflare 账户。
 
-这里访问域名所属服务区为 `example.com`，SaaS 服务区为管理 `example.net` 的那个 Cloudflare Zone。以 Dashboard 实际服务区为准，不要只按域名层级猜测。
+## 一、配置 b.com
 
-最终 DNS 链：
+### 绑定 Worker 域名
 
-```text
-t.example.com → tg.example.net → 第三方优选域名 → 优选 IP
-```
-
-实际请求路径：
+进入 `cf-webproxy` Worker → **Settings → Domains & Routes → Add → Custom Domain**，添加：
 
 ```text
-客户端（SNI / Host: t.example.com）
-  → Cloudflare 优选入口
-  → SaaS 自定义主机名 + Worker Route
-  → cf-webproxy
-  → Telegram（TCP 或 KWS）
+t.b.com
 ```
 
-CNAME 只参与 DNS 解析，不代表请求依次经过两个网站或多一台转发服务器。
+保留 Cloudflare 自动管理的 DNS 记录。打开 `https://t.b.com/healthz`，确认返回 `"ok":true`。
 
-## 2. 先验证 Worker 原始入口
+### 添加优选中间域名
 
-先按[主 README](../README.md)部署 Workers，设置加密变量 `PROXY_SECRET`。
-
-在 Worker 的 **Settings → Domains & Routes → Add → Custom Domain** 绑定：
-
-```text
-t.example.net
-```
-
-让 Cloudflare 管理对应记录，不要把它改成第三方优选 CNAME。访问：
-
-```text
-https://t.example.net/healthz
-```
-
-应返回 HTTP 200 和 `"ok":true`。先确认原始入口可用，再配置 SaaS；不要一开始就删除已有可用入口。
-
-## 3. 配置 SaaS 回退源站和证书
-
-进入 **SaaS 服务区（管理 example.net 的 Zone）→ SSL/TLS → Custom Hostnames / 自定义主机名**：
-
-1. 启用 Cloudflare for SaaS。若要求支付方式或套餐确认，先核对页面费用和配额。
-2. 将 **Fallback Origin / 回退源站** 设置为 `t.example.net`，等待 Active。
-3. 添加自定义主机名 **`t.example.com`**，选择 TXT 验证（若界面提供）。
-4. 按页面实际给出的名称和值，到 `example.com` 的 DNS 添加所有权验证和证书验证记录；不要自行拼接 TXT 值。
-5. 保留验证记录，并检查主机名状态、SSL 证书状态均为 **Active**。验证或刷新可能需要等待，不能只看其中一项。
-
-首次接入可先将访问域名设置为 **灰云 CNAME → `t.example.net`**，验证普通 SaaS 链路，确认正常后再切到第 5 节的优选中间域名。
-
-如果 `t.example.com` 原来直接绑定为 Worker Custom Domain，不能同时照搬两种管理方式；先准备并验证备用入口，再处理旧绑定及其管理的 DNS，避免切换中断。
-
-## 4. 添加 Worker Route：不要漏掉
-
-进入 **SaaS 服务区 → Workers Routes / Workers 路由 → 添加路由**：
-
-```text
-路由：t.example.com/*
-Worker：cf-webproxy
-```
-
-**这里填访问域名，不是回退源站域名或中间优选域名。** 虽然访问域名不属于这个 Zone 的名称后缀，但它是此 SaaS 服务区的自定义主机名；应在 SaaS 服务区添加此路由。
-
-仅将 `t.example.net` 绑定为 Worker Custom Domain，不等于 `t.example.com` 的 SaaS 流量会执行同一个 Worker。实际排查中曾出现原始入口 200、访问入口 522，添加对应路由后恢复 200。
-
-优先使用此精确路由，**不要在有其他业务的服务区直接添加 `*/*`**。Cloudflare 官方也提供通配路由方案，但会匹配该区更多流量，需自行审查影响范围。
-
-## 5. 配置两层优选 CNAME
-
-### SaaS 服务区：中间记录
-
-在管理 `example.net` 的 DNS 中添加：
+进入 **b.com → DNS**，添加：
 
 ```text
 类型：CNAME
-完整名称：tg.example.net
+名称：yx
 目标：你的第三方优选域名
-代理状态：仅 DNS（灰云）
-TTL：自动
+代理：仅 DNS（灰云）
 ```
 
-目标只填域名，不带协议、端口或路径。不要填写示例中文占位符。
+目标只填域名，不带 `https://`、端口或路径。
 
-### 访问域名服务区：入口记录
+## 二、配置 SaaS
 
-在 `example.com` 中添加或修改**同一条** `t` 记录：
+进入 **b.com → SSL/TLS → 自定义主机名（Custom Hostnames）**：
+
+1. 开通 Cloudflare for SaaS；如果要求绑卡，先确认费用和配额。
+2. 添加回退源站 **`t.b.com`**，等待状态为 Active / 有效。
+3. 添加自定义主机名 **`t.a.com`**，选择 TXT 验证（若界面提供）。
+4. 按页面给出的内容，到 **a.com → DNS** 添加所有权与证书验证记录；名称和值照抄，不要自己编。
+
+验证记录不要删，后面检查主机名与证书状态均为 Active / 有效。
+
+## 三、配置访问入口
+
+进入 **a.com → DNS**，添加或修改现有记录：
 
 ```text
 类型：CNAME
 名称：t
-目标：tg.example.net
-代理状态：仅 DNS（灰云）
-TTL：自动
+目标：yx.b.com
+代理：仅 DNS（灰云）
 ```
 
-同名不能再叠加一条 CNAME；先核对并处理冲突的 A / AAAA / CNAME。灰云使客户端沿 CNAME 获取优选解析，开橙云不能当成相同方案。
+不要给同一个名称叠加两条 CNAME。若 `t.a.com` 原来直接绑定为 Worker Custom Domain，先准备好备用入口，再处理旧绑定管理的记录。
 
-### 为什么不能直接 CNAME 到第三方？
-
-本例中，直接将访问域名指向第三方，曾使 SaaS 显示：
+最终 DNS 链：
 
 ```text
-Moved / 已移动
-custom hostname does not CNAME to this zone
+t.a.com → yx.b.com → 第三方优选域名 → 优选 IP
 ```
 
-中间域名让访问域名先指向自己的 SaaS 服务区，再从后续 CNAME 获取优选 IP。它不是额外的 HTTP 反向代理。以后更换提供方，也只需改中间记录。
+**不要省略 `yx.b.com` 直接指向第三方**，否则 SaaS 可能显示 `Moved / custom hostname does not CNAME to this zone`。中间域名只是 DNS 别名，不会额外增加一台转发服务器。
 
-这是本例的实际接入方式，**不是任意第三方线路都能用的保证**。必须持续检查主机名状态、证书续期和实际访问；若仍出现 Moved，不要当成无害提示。Cloudflare 文档说明，Moved 持续七天可能转为 Deleted。
+## 四、添加 Worker 路由（关键）
 
-## 6. 验证代理
-
-从实际使用 Telegram 的网络执行：
-
-```bash
-curl --connect-timeout 5 --max-time 15 https://t.example.com/healthz
-```
-
-不应跳过证书验证。使用 KWS 时，正常响应形如：
-
-```json
-{"ok":true,"carrier":"websocket","relay":"telegram-kws"}
-```
-
-TCP 模式的 `relay` 为 `direct-telegram-dc`，也属于正常配置。SaaS 优选不会自动启用 KWS；需要时在 Worker 中设置 `RELAY_TRANSPORT=kws`，重新部署并重连。
-
-如设置了 `PUBLIC_HOSTNAME` / `ALLOWED_HOSTNAMES`，确保访问域名被允许。两者同时设置时取交集；只添加白名单而保留另一个不匹配的单域名限制，仍可能失败。
-
-在支持 WEB Proxy 的 Telegram 客户端打开：
+进入 **b.com → Workers 路由 → 添加路由**：
 
 ```text
-https://t.me/webproxy?server=t.example.com&secret=你的PROXY_SECRET
+路由：t.a.com/*
+Worker：cf-webproxy
 ```
 
-检查连接、收发消息、图片和视频。**健康接口不连接 Telegram，200 不等于媒体和吞吐验证通过。** 不要公开密钥、会话 Token 或完整 Bridge URL。
+**在 b.com 的服务区添加，但路由填访问入口 `t.a.com/*`。** 不要填 `t.b.com/*` 或 `yx.b.com/*`，也不必用接管整个服务区的 `*/*`。
 
-测速应来自客户端实际网络。服务器测到的 CF-Ray 机房不代表你的入口，Ping 低也不保证 WebSocket 稳定或下载更快。
+只绑定回退源站的 Worker 域名，不等于 SaaS 请求也会执行 Worker。漏掉这一步，可能出现回退源站正常、访问入口报 **522**。
 
-## 7. 常见问题与回滚
+## 五、测试使用
 
-- **原始入口 200，访问入口 522**：优先检查 SaaS 服务区的 `访问域名/* → cf-webproxy` 路由，再检查 SaaS 状态、优选线路。522 本身不能证明唯一原因。
-- **Moved / 不再 CNAME 到此服务区**：检查是否省略了自己服务区内的中间 CNAME，以及该记录是否确实属于正确 SaaS Zone。先改回访问域名 → 回退源站的灰云 CNAME，等待重新验证。
-- **证书错误**：检查访问域名的 SaaS SSL 状态、验证记录及 CAA；不要用 `curl -k` 或关闭浏览器验证掩盖问题。
-- **403 / 1000 / 1034**：检查第三方解析、域名白名单和 Cloudflare 路由限制。中间域名不是用户入口，直接访问它报错不能代替最终入口测试。
-- **健康接口 500**：检查 `PROXY_SECRET` 格式和出站配置。
-- **修改 Worker 后路由丢失**：核对 Wrangler / Actions 与 Dashboard 的路由管理是否冲突；保留 SaaS 路由并在每次部署后复查入口，不能只看 Actions 绿色。
+确认 SaaS 主机名与证书都为 **Active / 有效**，再访问：
 
-回滚优选：将访问域名的同一条灰云 CNAME 从 `tg.example.net` 改回 `t.example.net`。保留 SaaS、验证记录和精确 Worker Route，再验证健康接口及客户端连接。不需要删除整个 Worker 或重新生成代理密钥。
+```text
+https://t.a.com/healthz
+```
 
-## 参考
+返回 `"ok":true` 后，在支持 WEB Proxy 的 Telegram 客户端打开：
 
-- [Cloudflare：Worker 作为 SaaS 回退源站](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/worker-as-origin/)
-- [Cloudflare：配置 SaaS](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/getting-started/)
-- [Cloudflare：Moved 状态与移除自定义主机名](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/remove-custom-hostnames/)
+```text
+https://t.me/webproxy?server=t.a.com&secret=你的PROXY_SECRET
+```
+
+再实测消息、图片和视频；健康检查成功不代表全部代理功能已验证。若设置了 `PUBLIC_HOSTNAME` / `ALLOWED_HOSTNAMES`，确保它们允许 `t.a.com`。
+
+## 简单排错
+
+- **522**：先检查 b.com 中是否添加了 `t.a.com/* → cf-webproxy` 路由，再检查 SaaS 状态和优选线路。
+- **Moved**：核对两层 CNAME，保留验证记录，不要忽略该状态。
+- **证书错误**：检查 SaaS SSL 状态和验证记录，不要关闭证书验证。
+- **优选后不通**：将 `t.a.com` 的同一条灰云 CNAME 临时改回 `t.b.com`，保留 SaaS 和 Worker 路由，先恢复普通接入。
+
+第三方优选不保证提速或长期可用，应在实际使用网络测试，并关注证书续期。SaaS 只影响入口，`RELAY_TRANSPORT=kws` 是独立的 Telegram 出站选项，两者不要混淆。
+
+[Cloudflare 官方：Worker 作为 SaaS 回退源站](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/advanced-settings/worker-as-origin/)
